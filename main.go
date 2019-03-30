@@ -10,11 +10,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ffuf/ffuf/pkg/ffuf"
-	"github.com/ffuf/ffuf/pkg/filter"
-	"github.com/ffuf/ffuf/pkg/input"
-	"github.com/ffuf/ffuf/pkg/output"
-	"github.com/ffuf/ffuf/pkg/runner"
+	"github.com/eur0pa/ffuf/pkg/ffuf"
+	"github.com/eur0pa/ffuf/pkg/filter"
+	"github.com/eur0pa/ffuf/pkg/input"
+	"github.com/eur0pa/ffuf/pkg/output"
+	"github.com/eur0pa/ffuf/pkg/runner"
 )
 
 type cliOptions struct {
@@ -52,15 +52,15 @@ func main() {
 	flag.Var(&opts.headers, "H", "Header `\"Name: Value\"`, separated by colon. Multiple -H flags are accepted.")
 	flag.StringVar(&conf.Url, "u", "", "Target URL")
 	flag.StringVar(&conf.Wordlist, "w", "", "Wordlist path")
-	flag.BoolVar(&conf.TLSSkipVerify, "k", false, "Skip TLS identity verification (insecure)")
+	flag.BoolVar(&conf.TLSSkipVerify, "k", true, "skip tls identity verification (insecure)")
 	flag.StringVar(&opts.delay, "p", "", "Seconds of `delay` between requests, or a range of random delay. For example \"0.1\" or \"0.1-2.0\"")
-	flag.StringVar(&opts.filterStatus, "fc", "", "Filter HTTP status codes from response")
+	flag.StringVar(&opts.filterStatus, "fc", "404,410,502,503", "Filter HTTP status codes from response")
 	flag.StringVar(&opts.filterSize, "fs", "", "Filter HTTP response size")
 	flag.StringVar(&opts.filterRegexp, "fr", "", "Filter regexp")
 	flag.StringVar(&opts.filterWords, "fw", "", "Filter by amount of words in response")
 	flag.StringVar(&conf.Data, "d", "", "POST data.")
 	flag.BoolVar(&conf.Colors, "c", false, "Colorize output.")
-	flag.StringVar(&opts.matcherStatus, "mc", "200,204,301,302,307,401,403", "Match HTTP status codes from respose")
+	flag.StringVar(&opts.matcherStatus, "mc", "*", "Match HTTP status codes from respose")
 	flag.StringVar(&opts.matcherSize, "ms", "", "Match HTTP response size")
 	flag.StringVar(&opts.matcherRegexp, "mr", "", "Match regexp")
 	flag.StringVar(&opts.matcherWords, "mw", "", "Match amount of words in response")
@@ -70,7 +70,7 @@ func main() {
 	flag.StringVar(&opts.outputFormat, "of", "json", "Output file format. Available formats: json")
 	flag.BoolVar(&conf.Quiet, "s", false, "Do not print additional information (silent mode)")
 	flag.BoolVar(&conf.StopOn403, "sf", false, "Stop when > 90% of responses return 403 Forbidden")
-	flag.IntVar(&conf.Threads, "t", 40, "Number of concurrent threads.")
+	flag.IntVar(&conf.Threads, "t", 50, "Number of concurrent threads.")
 	flag.BoolVar(&opts.showVersion, "V", false, "Show version information.")
 	flag.Parse()
 	if opts.showVersion {
@@ -137,7 +137,7 @@ func prepareConfig(parseOpts *cliOptions, conf *ffuf.Config) error {
 		if len(hs) == 2 {
 			fuzzedheader := false
 			for _, fv := range hs {
-				if strings.Index(fv, "FUZZ") != -1 {
+				if strings.Index(fv, "{}") != -1 {
 					// Add to fuzzheaders
 					fuzzedheader = true
 				}
@@ -202,15 +202,15 @@ func prepareConfig(parseOpts *cliOptions, conf *ffuf.Config) error {
 	conf.CommandLine = strings.Join(os.Args, " ")
 
 	//Search for keyword from URL and POST data too
-	if strings.Index(conf.Url, "FUZZ") != -1 {
+	if strings.Index(conf.Url, "{}") != -1 {
 		foundkeyword = true
 	}
-	if strings.Index(conf.Data, "FUZZ") != -1 {
+	if strings.Index(conf.Data, "{}") != -1 {
 		foundkeyword = true
 	}
 
 	if !foundkeyword {
-		errs.Add(fmt.Errorf("No FUZZ keyword(s) found in headers, URL or POST data, nothing to do"))
+		errs.Add(fmt.Errorf("No {} keyword(s) found in headers, URL or POST data, nothing to do"))
 	}
 
 	return errs.ErrorOrNil()

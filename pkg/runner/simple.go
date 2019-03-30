@@ -11,7 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/ffuf/ffuf/pkg/ffuf"
+	"github.com/eur0pa/ffuf/pkg/ffuf"
 )
 
 //Download results < 5MB
@@ -47,11 +47,11 @@ func (r *SimpleRunner) Prepare(input []byte) (ffuf.Request, error) {
 		req.Headers[h] = v
 	}
 	for h, v := range r.config.FuzzHeaders {
-		req.Headers[strings.Replace(h, "FUZZ", string(input), -1)] = strings.Replace(v, "FUZZ", string(input), -1)
+		req.Headers[strings.Replace(h, "{}", string(input), -1)] = strings.Replace(v, "{}", string(input), -1)
 	}
 	req.Input = input
-	req.Url = strings.Replace(r.config.Url, "FUZZ", string(input), -1)
-	req.Data = []byte(strings.Replace(r.config.Data, "FUZZ", string(input), -1))
+	req.Url = strings.Replace(r.config.Url, "{}", string(input), -1)
+	req.Data = []byte(strings.Replace(r.config.Data, "{}", string(input), -1))
 	return req, nil
 }
 
@@ -99,6 +99,7 @@ func (r *SimpleRunner) Execute(req *ffuf.Request) (ffuf.Response, error) {
 
 	wordsSize := len(strings.Split(string(resp.Data), " "))
 	resp.ContentWords = int64(wordsSize)
+	resp.Url = req.Url
 
 	return resp, nil
 }

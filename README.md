@@ -28,10 +28,10 @@ Heavily inspired by the great projects [gobuster](https://github.com/OJ/gobuster
 
 [![asciicast](https://asciinema.org/a/211350.png)](https://asciinema.org/a/211350)
 
-By using the FUZZ keyword at the end of URL (`-u`):
+By using the {} keyword at the end of URL (`-u`):
 
 ```
-ffuf -w /path/to/wordlist -u https://target/FUZZ
+ffuf -w /path/to/wordlist -u https://target/{}
 ```
 
 ### Virtual host discovery (without DNS records)
@@ -41,34 +41,34 @@ ffuf -w /path/to/wordlist -u https://target/FUZZ
 Assuming that the default virtualhost response size is 4242 bytes, we can filter out all the responses of that size (`-fs 4242`)while fuzzing the Host - header:
 
 ```
-ffuf -w /path/to/vhost/wordlist -u https://target -H "Host: FUZZ" -fs 4242
+ffuf -w /path/to/vhost/wordlist -u https://target -H "Host: {}" -fs 4242
 ```
 
 ### GET parameter fuzzing
 
-GET parameter name fuzzing is very similar to directory discovery, and works by defining the `FUZZ` keyword as a part of the URL. This also assumes an response size of 4242 bytes for invalid GET parameter name.
+GET parameter name fuzzing is very similar to directory discovery, and works by defining the `{}` keyword as a part of the URL. This also assumes an response size of 4242 bytes for invalid GET parameter name.
 
 ```
-ffuf -w /path/to/paramnames.txt -u https://target/script.php?FUZZ=test_value -fs 4242
+ffuf -w /path/to/paramnames.txt -u https://target/script.php?{}=test_value -fs 4242
 ```
 
 If the parameter name is known, the values can be fuzzed the same way. This example assumes a wrong parameter value returning HTTP response code 401.
 
 ```
-ffuf -w /path/to/values.txt -u https://target/script.php?valid_name=FUZZ -fc 401
+ffuf -w /path/to/values.txt -u https://target/script.php?valid_name={} -fc 401
 ```
 
 ### POST data fuzzing
 
-This is a very straightforward operation, again by using the `FUZZ` keyword. This example is fuzzing only part of the POST request. We're again filtering out the 401 responses.
+This is a very straightforward operation, again by using the `{}` keyword. This example is fuzzing only part of the POST request. We're again filtering out the 401 responses.
 
 ```
-ffuf -w /path/to/postdata.txt -X POST -d "username=admin\&password=FUZZ" https://target/login.php -fc 401
+ffuf -w /path/to/postdata.txt -X POST -d "username=admin\&password={}" https://target/login.php -fc 401
 ```
 
 ## Usage
 
-To define the test case for ffuf, use the keyword `FUZZ` anywhere in the URL (`-u`), headers (`-H`), or POST data (`-d`).
+To define the test case for ffuf, use the keyword `{}` anywhere in the URL (`-u`), headers (`-H`), or POST data (`-d`).
 
 ```
   -H "Name: Value"
@@ -114,13 +114,13 @@ To define the test case for ffuf, use the keyword `FUZZ` anywhere in the URL (`-
   -x string
     	HTTP Proxy URL
 ```
-eg. `ffuf -u https://example.org/FUZZ -w /path/to/wordlist`
+eg. `ffuf -u https://example.org/{} -w /path/to/wordlist`
 
 ## Installation
 
- - [Download](https://github.com/ffuf/ffuf/releases/latest) a prebuilt binary from [releases page](https://github.com/ffuf/ffuf/releases/latest), unpack and run!
+ - [Download](https://github.com/eur0pa/ffuf/releases/latest) a prebuilt binary from [releases page](https://github.com/eur0pa/ffuf/releases/latest), unpack and run!
  or
- - If you have go compiler installed: `go get github.com/ffuf/ffuf`
+ - If you have go compiler installed: `go get github.com/eur0pa/ffuf`
 
 The only dependency of ffuf is Go 1.11. No dependencies outside of Go standard library are needed.
 
