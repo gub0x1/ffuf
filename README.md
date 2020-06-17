@@ -1,28 +1,25 @@
 ```
-        /'___\  /'___\           /'___\       
-       /\ \__/ /\ \__/  __  __  /\ \__/       
-       \ \ ,__\\ \ ,__\/\ \/\ \ \ \ ,__\      
-        \ \ \_/ \ \ \_/\ \ \_\ \ \ \ \_/      
-         \ \_\   \ \_\  \ \____/  \ \_\       
-          \/_/    \/_/   \/___/    \/_/       
+        /'___\  /'___\           /'___\
+       /\ \__/ /\ \__/  __  __  /\ \__/
+       \ \ ,__\\ \ ,__\/\ \/\ \ \ \ ,__\
+        \ \ \_/ \ \ \_/\ \ \_\ \ \ \ \_/
+         \ \_\   \ \_\  \ \____/  \ \_\
+          \/_/    \/_/   \/___/    \/_/
 ```
-
 
 # ffuf - Fuzz Faster U Fool
 
-A fast web fuzzer written in Go. 
+A fast web fuzzer written in Go.
 
-Heavily inspired by the great projects [gobuster](https://github.com/OJ/gobuster) and [wfuzz](https://github.com/xmendez/wfuzz).
+## Installation
 
-## Features
+- [Download](https://github.com/ffuf/ffuf/releases/latest) a prebuilt binary from [releases page](https://github.com/ffuf/ffuf/releases/latest), unpack and run!
+  or
+- If you have go compiler installed: `go get github.com/ffuf/ffuf`
 
- - Fast!
- - Allows fuzzing of HTTP header values, POST data, and different parts of URL, including GET parameter names and values
- - Silent mode (`-s`) for clean output that's easy to use in pipes to other processes.
- - Modularized architecture that allows integration with existing toolchains with reasonable effort
- - Easy-to-add filters and matchers (they are interoperable)
+The only dependency of ffuf is Go 1.11. No dependencies outside of Go standard library are needed.
 
-## Example cases
+## Example usage
 
 ### Typical directory discovery
 
@@ -63,91 +60,136 @@ ffuf -w /path/to/values.txt -u https://target/script.php?valid_name=FUZZ -fc 401
 This is a very straightforward operation, again by using the `FUZZ` keyword. This example is fuzzing only part of the POST request. We're again filtering out the 401 responses.
 
 ```
-ffuf -w /path/to/postdata.txt -X POST -d "username=admin\&password=FUZZ" https://target/login.php -fc 401
+ffuf -w /path/to/postdata.txt -X POST -d "username=admin\&password=FUZZ" -u https://target/login.php -fc 401
+```
+
+### Maximum execution time
+
+If you don't want ffuf to run indefinitely, you can use the `-maxtime`. This stops __the entire__ process after a given time (in seconds).
+
+```
+ffuf -w /path/to/wordlist -u https://target/FUZZ -maxtime 60
+```
+
+When working with recursion, you can control the maxtime __per job__ using `-maxtime-job`. This will stop the current job after a given time (in seconds) and continue with the next one. New jobs are created when the recursion functionality detects a subdirectory.
+
+```
+ffuf -w /path/to/wordlist -u https://target/FUZZ -maxtime-job 60 -recursion -recursion-depth 2
+```
+
+It is also possible to combine both flags limiting the per job maximum execution time as well as the overall execution time. If you do not use recursion then both flags behave equally.
+
+### Using external mutator to produce test cases
+
+For this example, we'll fuzz JSON data that's sent over POST. [Radamsa](https://gitlab.com/akihe/radamsa) is used as the mutator.
+
+When `--input-cmd` is used, ffuf will display matches as their position. This same position value will be available for the callee as an environment variable `$FFUF_NUM`. We'll use this position value as the seed for the mutator. Files example1.txt and example2.txt contain valid JSON payloads. We are matching all the responses, but filtering out response code `400 - Bad request`:
+
+```
+ffuf --input-cmd 'radamsa --seed $FFUF_NUM example1.txt example2.txt' -H "Content-Type: application/json" -X POST -u https://ffuf.io.fi/ -mc all -fc 400
+```
+
+It of course isn't very efficient to call the mutator for each payload, so we can also pre-generate the payloads, still using [Radamsa](https://gitlab.com/akihe/radamsa) as an example:
+
+```
+# Generate 1000 example payloads
+radamsa -n 1000 -o %n.txt example1.txt example2.txt
+
+# This results into files 1.txt ... 1000.txt
+# Now we can just read the payload data in a loop from file for ffuf
+
+ffuf --input-cmd 'cat $FFUF_NUM.txt' -H "Content-Type: application/json" -X POST -u https://ffuf.io.fi/ -mc all -fc 400
 ```
 
 ## Usage
 
 To define the test case for ffuf, use the keyword `FUZZ` anywhere in the URL (`-u`), headers (`-H`), or POST data (`-d`).
+
 ```
-  -H "Name: Value"
-    	Header "Name: Value", separated by colon. Multiple -H flags are accepted.
-  -V	Show version information.
-  -X string
-    	HTTP method to use (default "GET")
-  -c	Colorize output.
-  -d string
-    	POST data.
-  -fc string
-    	Filter HTTP status codes from response
-  -fr string
-    	Filter regexp
-  -fs string
-    	Filter HTTP response size
-  -fw string
-    	Filter by amount of words in response
-  -k	Skip TLS identity verification (insecure)
-  -mc string
-    	Match HTTP status codes from respose (default "200,204,301,302,307,401,403")
-  -mr string
-    	Match regexp
-  -ms string
-    	Match HTTP response size
-  -mw string
-    	Match amount of words in response
-  -o string
-    	Write output to file
-  -of string
-    	Output file format. Available formats: json, csv, ecsv (default "json")
-  -p delay
-    	Seconds of delay between requests, or a range of random delay. For example "0.1" or "0.1-2.0"
-  -r	Follow redirects
-  -s	Do not print additional information (silent mode)
-  -sa
-    	Stop on all error cases. Implies -sf and -se
-  -se
-    	Stop on spurious errors
-  -sf
-    	Stop when > 90% of responses return 403 Forbidden
-  -t int
-    	Number of concurrent threads. (default 40)
-  -u string
-    	Target URL
-  -w string
-    	Wordlist path
-  -x string
-    	HTTP Proxy URL
+Fuzz Faster U Fool - v1.0
+
+HTTP OPTIONS:
+  -H               Header `"Name: Value"`, separated by colon. Multiple -H flags are accepted.
+  -X               HTTP method to use (default: GET)
+  -b               Cookie data `"NAME1=VALUE1; NAME2=VALUE2"` for copy as curl functionality.
+  -d               POST data
+  -r               Follow redirects (default: false)
+  -recursion       Scan recursively. Only FUZZ keyword is supported, and URL (-u) has to end in it. (default: false)
+  -recursion-depth Maximum recursion depth. (default: 0)
+  -replay-proxy    Replay matched requests using this proxy.
+  -timeout         HTTP request timeout in seconds. (default: 10)
+  -u               Target URL
+  -x               HTTP Proxy URL
+
+GENERAL OPTIONS:
+  -V               Show version information. (default: false)
+  -ac              Automatically calibrate filtering options (default: false)
+  -acc             Custom auto-calibration string. Can be used multiple times. Implies -ac
+  -c               Colorize output. (default: false)
+  -maxtime         Maximum running time in seconds for the entire process. (default: 0)
+  -maxtime-job     Maximum running time in seconds per job. (default: 0)
+  -p               Seconds of `delay` between requests, or a range of random delay. For example "0.1" or "0.1-2.0"
+  -s               Do not print additional information (silent mode) (default: false)
+  -sa              Stop on all error cases. Implies -sf and -se. (default: false)
+  -se              Stop on spurious errors (default: false)
+  -sf              Stop when > 95% of responses return 403 Forbidden (default: false)
+  -t               Number of concurrent threads. (default: 40)
+  -v               Verbose output, printing full URL and redirect location (if any) with the results. (default: false)
+
+MATCHER OPTIONS:
+  -mc              Match HTTP status codes, or "all" for everything. (default: 200,204,301,302,307,401,403)
+  -ml              Match amount of lines in response
+  -mr              Match regexp
+  -ms              Match HTTP response size
+  -mw              Match amount of words in response
+
+FILTER OPTIONS:
+  -fc              Filter HTTP status codes from response. Comma separated list of codes and ranges
+  -fl              Filter by amount of lines in response. Comma separated list of line counts and ranges
+  -fr              Filter regexp
+  -fs              Filter HTTP response size. Comma separated list of sizes and ranges
+  -fw              Filter by amount of words in response. Comma separated list of word counts and ranges
+
+INPUT OPTIONS:
+  -D               DirSearch wordlist compatibility mode. Used in conjunction with -e flag. (default: false)
+  -e               Comma separated list of extensions. Extends FUZZ keyword.
+  -ic              Ignore wordlist comments (default: false)
+  -input-cmd       Command producing the input. --input-num is required when using this input method. Overrides -w.
+  -input-num       Number of inputs to test. Used in conjunction with --input-cmd. (default: 100)
+  -mode            Multi-wordlist operation mode. Available modes: clusterbomb, pitchfork (default: clusterbomb)
+  -request         File containing the raw http request
+  -request-proto   Protocol to use along with raw request (default: https)
+  -w               Wordlist file path and (optional) keyword separated by colon. eg. '/path/to/wordlist:KEYWORD'
+
+OUTPUT OPTIONS:
+  -debug-log       Write all of the internal logging to the specified file.
+  -o               Write output to file
+  -od              Directory path to store matched results to.
+  -of              Output file format. Available formats: json, ejson, html, md, csv, ecsv (default: json)
+
+EXAMPLE USAGE:
+  Fuzz file paths from wordlist.txt, match all responses but filter out those with content-size 42.
+  Colored, verbose output.
+    ffuf -w wordlist.txt -u https://example.org/FUZZ -mc all -fs 42 -c -v
+
+  Fuzz Host-header, match HTTP 200 responses.
+    ffuf -w hosts.txt -u https://example.org/ -H "Host: FUZZ" -mc 200
+
+  Fuzz POST JSON data. Match all responses not containing text "error".
+    ffuf -w entries.txt -u https://example.org/ -X POST -H "Content-Type: application/json" \
+      -d '{"name": "FUZZ", "anotherkey": "anothervalue"}' -fr "error"
+
+  Fuzz multiple locations. Match only responses reflecting the value of "VAL" keyword. Colored.
+    ffuf -w params.txt:PARAM -w values.txt:VAL -u https://example.org/?PARAM=VAL -mr "VAL" -c
+
+  More information and examples: https://github.com/ffuf/ffuf
 ```
 
-eg. `ffuf -u https://example.org/FUZZ -w /path/to/wordlist`
+## Helper scripts and advanced payloads
 
-## Installation
+See [ffuf-scripts](https://github.com/ffuf/ffuf-scripts) repository for helper scripts and payload generators
+for different workflows and usage scenarios.
 
- - [Download](https://github.com/ffuf/ffuf/releases/latest) a prebuilt binary from [releases page](https://github.com/ffuf/ffuf/releases/latest), unpack and run!
- or
- - If you have go compiler installed: `go get github.com/ffuf/ffuf`
+## License
 
-The only dependency of ffuf is Go 1.11. No dependencies outside of Go standard library are needed.
-
-## Changelog
-
-- master
-   - New
-      - New output file formats: CSV and eCSV (CSV with base64 encoded input field to avoid CSV breakage with payloads containing a comma)
-      - New CLI flag to follow redirects
-      - Erroring connections will be retried once
-      - Error counter in status bar
-      - New CLI flags: -se (stop on spurious errors) and -sa (stop on all errors, implies -se and -sf)
-- v0.8
-   - New
-      - New CLI flag to write output to a file in JSON format
-      - New CLI flag to stop on spurious 403 responses
-   - Changed
-      - Regex matching / filtering now matches the headers alongside of the response body
-
-## TODO
- - Tests!
- - Optional scope for redirects
- - Client / server architecture to queue jobs and fetch the results later
- - Fuzzing multiple values at the same time
- - Output module to push the results to an HTTP API
+ffuf is released under MIT license. See [LICENSE](https://github.com/ffuf/ffuf/blob/master/LICENSE).

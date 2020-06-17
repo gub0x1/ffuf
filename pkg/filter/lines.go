@@ -9,24 +9,23 @@ import (
 	"github.com/ffuf/ffuf/pkg/ffuf"
 )
 
-type SizeFilter struct {
+type LineFilter struct {
 	Value []ffuf.ValueRange
 }
 
-func NewSizeFilter(value string) (ffuf.FilterProvider, error) {
+func NewLineFilter(value string) (ffuf.FilterProvider, error) {
 	var intranges []ffuf.ValueRange
 	for _, sv := range strings.Split(value, ",") {
 		vr, err := ffuf.ValueRangeFromString(sv)
 		if err != nil {
-			return &SizeFilter{}, fmt.Errorf("Size filter or matcher (-fs / -ms): invalid value: %s", sv)
+			return &LineFilter{}, fmt.Errorf("Line filter or matcher (-fl / -ml): invalid value: %s", sv)
 		}
-
 		intranges = append(intranges, vr)
 	}
-	return &SizeFilter{Value: intranges}, nil
+	return &LineFilter{Value: intranges}, nil
 }
 
-func (f *SizeFilter) MarshalJSON() ([]byte, error) {
+func (f *LineFilter) MarshalJSON() ([]byte, error) {
 	value := make([]string, 0)
 	for _, v := range f.Value {
 		if v.Min == v.Max {
@@ -42,16 +41,17 @@ func (f *SizeFilter) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (f *SizeFilter) Filter(response *ffuf.Response) (bool, error) {
+func (f *LineFilter) Filter(response *ffuf.Response) (bool, error) {
+	linesSize := len(strings.Split(string(response.Data), "\n"))
 	for _, iv := range f.Value {
-		if iv.Min <= response.ContentLength && response.ContentLength <= iv.Max {
+		if iv.Min <= int64(linesSize) && int64(linesSize) <= iv.Max {
 			return true, nil
 		}
 	}
 	return false, nil
 }
 
-func (f *SizeFilter) Repr() string {
+func (f *LineFilter) Repr() string {
 	var strval []string
 	for _, iv := range f.Value {
 		if iv.Min == iv.Max {
@@ -60,5 +60,5 @@ func (f *SizeFilter) Repr() string {
 			strval = append(strval, strconv.Itoa(int(iv.Min))+"-"+strconv.Itoa(int(iv.Max)))
 		}
 	}
-	return fmt.Sprintf("Response size: %s", strings.Join(strval, ","))
+	return fmt.Sprintf("Response lines: %s", strings.Join(strval, ","))
 }

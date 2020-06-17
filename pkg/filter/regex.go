@@ -1,8 +1,10 @@
 package filter
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/ffuf/ffuf/pkg/ffuf"
 )
@@ -15,9 +17,17 @@ type RegexpFilter struct {
 func NewRegexpFilter(value string) (ffuf.FilterProvider, error) {
 	re, err := regexp.Compile(value)
 	if err != nil {
-		return &RegexpFilter{}, fmt.Errorf("Size filter or matcher (-fs / -ms): invalid value: %s", value)
+		return &RegexpFilter{}, fmt.Errorf("Regexp filter or matcher (-fr / -mr): invalid value: %s", value)
 	}
 	return &RegexpFilter{Value: re, valueRaw: value}, nil
+}
+
+func (f *RegexpFilter) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&struct {
+		Value string `json:"value"`
+	}{
+		Value: f.valueRaw,
+	})
 }
 
 func (f *RegexpFilter) Filter(response *ffuf.Response) (bool, error) {
@@ -29,7 +39,15 @@ func (f *RegexpFilter) Filter(response *ffuf.Response) (bool, error) {
 	}
 	matchdata := []byte(matchheaders)
 	matchdata = append(matchdata, response.Data...)
-	return f.Value.Match(matchdata), nil
+	pattern := f.valueRaw
+	for keyword, inputitem := range response.Request.Input {
+		pattern = strings.Replace(pattern, keyword, regexp.QuoteMeta(string(inputitem)), -1)
+	}
+	matched, err := regexp.Match(pattern, matchdata)
+	if err != nil {
+		return false, nil
+	}
+	return matched, nil
 }
 
 func (f *RegexpFilter) Repr() string {

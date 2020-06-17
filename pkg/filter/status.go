@@ -1,6 +1,7 @@
 package filter
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -8,25 +9,55 @@ import (
 	"github.com/ffuf/ffuf/pkg/ffuf"
 )
 
+const AllStatuses = 0
+
 type StatusFilter struct {
-	Value []int64
+	Value []ffuf.ValueRange
 }
 
 func NewStatusFilter(value string) (ffuf.FilterProvider, error) {
-	var intvals []int64
+	var intranges []ffuf.ValueRange
 	for _, sv := range strings.Split(value, ",") {
-		intval, err := strconv.ParseInt(sv, 10, 0)
-		if err != nil {
-			return &StatusFilter{}, fmt.Errorf("Status filter or matcher (-fc / -mc): invalid value %s", value)
+		if sv == "all" {
+			intranges = append(intranges, ffuf.ValueRange{AllStatuses, AllStatuses})
+		} else {
+			vr, err := ffuf.ValueRangeFromString(sv)
+			if err != nil {
+				return &StatusFilter{}, fmt.Errorf("Status filter or matcher (-fc / -mc): invalid value %s", sv)
+			}
+			intranges = append(intranges, vr)
 		}
-		intvals = append(intvals, intval)
 	}
-	return &StatusFilter{Value: intvals}, nil
+	return &StatusFilter{Value: intranges}, nil
+}
+
+func (f *StatusFilter) MarshalJSON() ([]byte, error) {
+	value := make([]string, 0)
+	for _, v := range f.Value {
+		if v.Min == 0 && v.Max == 0 {
+			value = append(value, "all")
+		} else {
+			if v.Min == v.Max {
+				value = append(value, strconv.FormatInt(v.Min, 10))
+			} else {
+				value = append(value, fmt.Sprintf("%d-%d", v.Min, v.Max))
+			}
+		}
+	}
+	return json.Marshal(&struct {
+		Value string `json:"value"`
+	}{
+		Value: strings.Join(value, ","),
+	})
 }
 
 func (f *StatusFilter) Filter(response *ffuf.Response) (bool, error) {
 	for _, iv := range f.Value {
-		if iv == response.StatusCode {
+		if iv.Min == AllStatuses && iv.Max == AllStatuses {
+			// Handle the "all" case
+			return true, nil
+		}
+		if iv.Min <= response.StatusCode && response.StatusCode <= iv.Max {
 			return true, nil
 		}
 	}
@@ -36,7 +67,13 @@ func (f *StatusFilter) Filter(response *ffuf.Response) (bool, error) {
 func (f *StatusFilter) Repr() string {
 	var strval []string
 	for _, iv := range f.Value {
-		strval = append(strval, strconv.Itoa(int(iv)))
+		if iv.Min == AllStatuses && iv.Max == AllStatuses {
+			strval = append(strval, "all")
+		} else if iv.Min == iv.Max {
+			strval = append(strval, strconv.Itoa(int(iv.Min)))
+		} else {
+			strval = append(strval, strconv.Itoa(int(iv.Min))+"-"+strconv.Itoa(int(iv.Max)))
+		}
 	}
 	return fmt.Sprintf("Response status: %s", strings.Join(strval, ","))
 }

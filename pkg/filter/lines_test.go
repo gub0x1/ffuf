@@ -7,23 +7,23 @@ import (
 	"github.com/ffuf/ffuf/pkg/ffuf"
 )
 
-func TestNewWordFilter(t *testing.T) {
-	f, _ := NewWordFilter("200,301,400-410,500")
-	wordsRepr := f.Repr()
-	if strings.Index(wordsRepr, "200,301,400-410,500") == -1 {
+func TestNewLineFilter(t *testing.T) {
+	f, _ := NewLineFilter("200,301,400-410,500")
+	linesRepr := f.Repr()
+	if strings.Index(linesRepr, "200,301,400-410,500") == -1 {
 		t.Errorf("Word filter was expected to have 4 values")
 	}
 }
 
-func TestNewWordFilterError(t *testing.T) {
-	_, err := NewWordFilter("invalid")
+func TestNewLineFilterError(t *testing.T) {
+	_, err := NewLineFilter("invalid")
 	if err == nil {
 		t.Errorf("Was expecting an error from errenous input data")
 	}
 }
 
-func TestWordFiltering(t *testing.T) {
-	f, _ := NewWordFilter("200,301,402-450,500")
+func TestLineFiltering(t *testing.T) {
+	f, _ := NewLineFilter("200,301,402-450,500")
 	for i, test := range []struct {
 		input  int64
 		output bool

@@ -8,13 +8,27 @@ type FilterProvider interface {
 
 //RunnerProvider is an interface for request executors
 type RunnerProvider interface {
-	Prepare(input []byte) (Request, error)
+	Prepare(input map[string][]byte) (Request, error)
 	Execute(req *Request) (Response, error)
 }
 
 //InputProvider interface handles the input data for RunnerProvider
 type InputProvider interface {
+	AddProvider(InputProviderConfig) error
 	Next() bool
+	Position() int
+	Reset()
+	Value() map[string][]byte
+	Total() int
+}
+
+//InternalInputProvider interface handles providing input data to InputProvider
+type InternalInputProvider interface {
+	Keyword() string
+	Next() bool
+	Position() int
+	ResetPosition()
+	IncrementPosition()
 	Value() []byte
 	Total() int
 }
@@ -23,8 +37,9 @@ type InputProvider interface {
 type OutputProvider interface {
 	Banner() error
 	Finalize() error
-	Progress(status string)
+	Progress(status Progress)
+	Info(infostring string)
 	Error(errstring string)
 	Warning(warnstring string)
-	Result(resp Response) bool
+	Result(resp Response)
 }

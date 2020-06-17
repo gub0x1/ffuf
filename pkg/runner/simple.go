@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/http/httputil"
+	"net/textproto"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -22,20 +25,35 @@ type SimpleRunner struct {
 	client *http.Client
 }
 
-func NewSimpleRunner(conf *ffuf.Config) ffuf.RunnerProvider {
+func NewSimpleRunner(conf *ffuf.Config, replay bool) ffuf.RunnerProvider {
 	var simplerunner SimpleRunner
-	simplerunner.config = conf
+	proxyURL := http.ProxyFromEnvironment
+	customProxy := ""
 
+	if replay {
+		customProxy = conf.ReplayProxyURL
+	} else {
+		customProxy = conf.ProxyURL
+	}
+	if len(customProxy) > 0 {
+		pu, err := url.Parse(customProxy)
+		if err == nil {
+			proxyURL = http.ProxyURL(pu)
+		}
+	}
+
+	simplerunner.config = conf
 	simplerunner.client = &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse },
-		Timeout:       time.Duration(10 * time.Second),
+		Timeout:       time.Duration(time.Duration(conf.Timeout) * time.Second),
 		Transport: &http.Transport{
-			Proxy:               conf.ProxyURL,
+			Proxy:               proxyURL,
 			MaxIdleConns:        1000,
 			MaxIdleConnsPerHost: 500,
 			MaxConnsPerHost:     500,
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: conf.TLSSkipVerify,
+				InsecureSkipVerify: true,
+				Renegotiation:      tls.RenegotiateOnceAsClient,
 			},
 		}}
 
@@ -45,44 +63,65 @@ func NewSimpleRunner(conf *ffuf.Config) ffuf.RunnerProvider {
 	return &simplerunner
 }
 
-func (r *SimpleRunner) Prepare(input []byte) (ffuf.Request, error) {
+func (r *SimpleRunner) Prepare(input map[string][]byte) (ffuf.Request, error) {
 	req := ffuf.NewRequest(r.config)
-	for h, v := range r.config.StaticHeaders {
-		req.Headers[h] = v
+
+	req.Headers = r.config.Headers
+	req.Url = r.config.Url
+	req.Method = r.config.Method
+	req.Data = []byte(r.config.Data)
+
+	for keyword, inputitem := range input {
+		req.Method = strings.Replace(req.Method, keyword, string(inputitem), -1)
+		headers := make(map[string]string, 0)
+		for h, v := range req.Headers {
+			var CanonicalHeader string = textproto.CanonicalMIMEHeaderKey(strings.Replace(h, keyword, string(inputitem), -1))
+			headers[CanonicalHeader] = strings.Replace(v, keyword, string(inputitem), -1)
+		}
+		req.Headers = headers
+		req.Url = strings.Replace(req.Url, keyword, string(inputitem), -1)
+		req.Data = []byte(strings.Replace(string(req.Data), keyword, string(inputitem), -1))
 	}
-	for h, v := range r.config.FuzzHeaders {
-		req.Headers[strings.Replace(h, "FUZZ", string(input), -1)] = strings.Replace(v, "FUZZ", string(input), -1)
-	}
+
 	req.Input = input
-	req.Url = strings.Replace(r.config.Url, "FUZZ", string(input), -1)
-	req.Data = []byte(strings.Replace(r.config.Data, "FUZZ", string(input), -1))
 	return req, nil
 }
 
 func (r *SimpleRunner) Execute(req *ffuf.Request) (ffuf.Response, error) {
 	var httpreq *http.Request
 	var err error
+	var rawreq []byte
 	data := bytes.NewReader(req.Data)
 	httpreq, err = http.NewRequest(req.Method, req.Url, data)
 	if err != nil {
 		return ffuf.Response{}, err
 	}
-	// Add user agent string if not defined
+
+	// set default User-Agent header if not present
 	if _, ok := req.Headers["User-Agent"]; !ok {
 		req.Headers["User-Agent"] = fmt.Sprintf("%s v%s", "Fuzz Faster U Fool", ffuf.VERSION)
 	}
+
 	// Handle Go http.Request special cases
 	if _, ok := req.Headers["Host"]; ok {
 		httpreq.Host = req.Headers["Host"]
 	}
+
+	req.Host = httpreq.Host
 	httpreq = httpreq.WithContext(r.config.Context)
 	for k, v := range req.Headers {
 		httpreq.Header.Set(k, v)
 	}
+
+	if len(r.config.OutputDirectory) > 0 {
+		rawreq, _ = httputil.DumpRequestOut(httpreq, true)
+	}
+
 	httpresp, err := r.client.Do(httpreq)
 	if err != nil {
 		return ffuf.Response{}, err
 	}
+
 	resp := ffuf.NewResponse(httpresp, req)
 	defer httpresp.Body.Close()
 
@@ -90,10 +129,16 @@ func (r *SimpleRunner) Execute(req *ffuf.Request) (ffuf.Response, error) {
 	size, err := strconv.Atoi(httpresp.Header.Get("Content-Length"))
 	if err == nil {
 		resp.ContentLength = int64(size)
-		if size > MAX_DOWNLOAD_SIZE {
+		if (r.config.IgnoreBody) || (size > MAX_DOWNLOAD_SIZE) {
 			resp.Cancelled = true
 			return resp, nil
 		}
+	}
+
+	if len(r.config.OutputDirectory) > 0 {
+		rawresp, _ := httputil.DumpResponse(httpresp, true)
+		resp.Request.Raw = string(rawreq)
+		resp.Raw = string(rawresp)
 	}
 
 	if respbody, err := ioutil.ReadAll(httpresp.Body); err == nil {
@@ -102,7 +147,9 @@ func (r *SimpleRunner) Execute(req *ffuf.Request) (ffuf.Response, error) {
 	}
 
 	wordsSize := len(strings.Split(string(resp.Data), " "))
+	linesSize := len(strings.Split(string(resp.Data), "\n"))
 	resp.ContentWords = int64(wordsSize)
+	resp.ContentLines = int64(linesSize)
 
 	return resp, nil
 }
